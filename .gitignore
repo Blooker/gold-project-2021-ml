@@ -71,7 +71,7 @@ fabric.properties
 .idea/caches/build_file_checksums.ser
 
 # Data folder
-data/
+data
 data/**
 
 # Python cache
