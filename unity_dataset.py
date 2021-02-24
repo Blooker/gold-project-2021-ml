@@ -1,25 +1,33 @@
 import os
 
+import pandas as pd
+import torch
+
 from torch.utils.data import Dataset
 
 from skimage import io
 
 
 class UnityDataset(Dataset):
-    def __init__(self, root_dir, img_size, patch_size, transform=None):
+    def __init__(self, lit_folder, unlit_folder, depth_folder, csv_file, root_dir, img_size, patch_size, transform=None):
         self.root_dir = root_dir
+        self.lit_folder = lit_folder
+        self.unlit_folder = unlit_folder
+        self.depth_folder = depth_folder
+
+        self.annotations = pd.read_csv(self.root_dir + "/" + csv_file, header=None).values
+
+        self.transform = transform
 
         self.img_size = img_size
         self.patch_size = patch_size
 
         self.patch_dim = (self.img_size[0] // self.patch_size[0]), (self.img_size[1] // self.patch_size[1])
 
-        self.transform = transform
-
         self.num_images = 27516
 
     def __len__(self):
-        return self.num_images * self.patch_dim[0] * self.patch_dim[1]
+        return len(self.annotations) * self.patch_dim[0] * self.patch_dim[1]
 
     def __getitem__(self, index):
 
@@ -27,10 +35,13 @@ class UnityDataset(Dataset):
         # patch[0] = image index
         # patch[1] = col that we'll take the patch from
         # patch[2] = row that we'll take the patch from
+        # patch[3] = index of the patch from top left to bottom right
 
-        x_reg_filename = "regular/{}.png".format(patch[0] + self.num_images)
-        x_dep_filename = "depth/{}.png".format(patch[0])
-        y_filename = "regular/{}.png".format(patch[0])
+        filename = "{}.png".format(patch[0])
+
+        x_reg_filename = self.unlit_folder + "/" + filename
+        x_dep_filename = self.depth_folder + "/" + filename
+        y_filename = self.lit_folder + "/" + filename
 
         x_reg_path = os.path.join(self.root_dir, x_reg_filename)
         x_dep_path = os.path.join(self.root_dir, x_dep_filename)
@@ -55,13 +66,22 @@ class UnityDataset(Dataset):
             x_dep_image = self.transform(x_dep_image)
             y_image = self.transform(y_image)
 
-        return x_reg_image, x_dep_image, y_image
+        # Get patch index
+        x_patch = patch[3] / (self.patch_dim[0] * self.patch_dim[1])
+
+        # Get corresponding pos data
+        x_pos = torch.Tensor(self.annotations[patch[0]])
+
+        return x_reg_image, x_dep_image, x_patch, x_pos, y_image
 
     def patch_from_index(self, index):
         patches = self.patch_dim[0] * self.patch_dim[1]
 
         img_index = index // patches
+
         col_index = index % self.patch_dim[0]
         row_index = (index - (patches*img_index)) // self.patch_dim[0]
 
-        return img_index, col_index, row_index
+        patch_index = (row_index * self.patch_dim[0]) + col_index
+
+        return img_index, col_index, row_index, patch_index
