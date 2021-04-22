@@ -9,7 +9,7 @@ from skimage import io
 
 
 class UnityDataset(Dataset):
-    def __init__(self, lit_folder, unlit_folder, depth_folder, csv_file, root_dir, img_size, patch_size, transform=None):
+    def __init__(self, lit_folder, unlit_folder, depth_folder, csv_file, root_dir, img_size, patch_size, light_data_size, transform=None):
         self.root_dir = root_dir
         self.lit_folder = lit_folder
         self.unlit_folder = unlit_folder
@@ -21,6 +21,7 @@ class UnityDataset(Dataset):
 
         self.img_size = img_size
         self.patch_size = patch_size
+        self.light_data_size = light_data_size
 
         self.patch_dim = (self.img_size[0] // self.patch_size[0]), (self.img_size[1] // self.patch_size[1])
 
@@ -69,10 +70,11 @@ class UnityDataset(Dataset):
         # Get patch index
         x_patch = patch[3] / (self.patch_dim[0] * self.patch_dim[1])
 
-        # Get corresponding pos data
-        x_pos = torch.Tensor(self.annotations[patch[0]])
+        # Get corresponding pos and light data
+        x_pos = torch.Tensor(self.annotations[patch[0], :-self.light_data_size])
+        x_light = torch.Tensor(self.annotations[patch[0], -self.light_data_size:])
 
-        return x_reg_image, x_dep_image, x_patch, x_pos, y_image
+        return x_reg_image, x_dep_image, x_patch, x_pos, x_light, y_image
 
     def patch_from_index(self, index):
         patches = self.patch_dim[0] * self.patch_dim[1]
