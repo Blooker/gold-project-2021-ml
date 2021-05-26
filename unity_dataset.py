@@ -24,20 +24,13 @@ class UnityDataset(Dataset):
 
         self.patch_dim = (self.img_size[0] // self.patch_size[0]), (self.img_size[1] // self.patch_size[1])
 
-        self.num_images = len(self.annotations)
+        self.num_patches = self.patch_dim[0] * self.patch_dim[1]
 
     def __len__(self):
-        return len(self.annotations) * self.patch_dim[0] * self.patch_dim[1]
+        return len(self.annotations)
 
     def __getitem__(self, index):
-
-        patch = self.patch_from_index(index)
-        # patch[0] = image index
-        # patch[1] = col that we'll take the patch from
-        # patch[2] = row that we'll take the patch from
-        # patch[3] = index of the patch from top left to bottom right
-
-        filename = "{}.png".format(patch[0])
+        filename = "{}.png".format(index)
 
         x_reg_filename = self.unlit_folder + "/" + filename
         x_dep_filename = self.depth_folder + "/" + filename
@@ -51,28 +44,43 @@ class UnityDataset(Dataset):
         x_dep_image = io.imread(x_dep_path)
         y_image = io.imread(y_img_path)
 
-        patch_x_bounds = patch[1]*self.patch_size[0], (patch[1]+1)*self.patch_size[0]
-        patch_y_bounds = patch[2]*self.patch_size[1], (patch[2]+1)*self.patch_size[1]
+        x_reg_patches = torch.zeros(size=(self.num_patches, 3, self.patch_size[1], self.patch_size[0]))
+        x_dep_patches = torch.zeros(size=(self.num_patches, 1, self.patch_size[1], self.patch_size[0]))
+        x_patch_indices = torch.zeros(size=(self.num_patches, 1))
 
-        # Get rid of alpha channel and crop to desired patch size
-        x_reg_image = x_reg_image[patch_y_bounds[0]:patch_y_bounds[1], patch_x_bounds[0]:patch_x_bounds[1], :3]
-        y_image = y_image[patch_y_bounds[0]:patch_y_bounds[1], patch_x_bounds[0]:patch_x_bounds[1], :3]
+        y_patches = torch.zeros(size=(self.num_patches, 3, self.patch_size[1], self.patch_size[0]))
 
-        # Get rid of all but one channel (greyscale) and crop to desired patch size
-        x_dep_image = x_dep_image[patch_y_bounds[0]:patch_y_bounds[1], patch_x_bounds[0]:patch_x_bounds[1], :1]
+        patch_index = 0
+        for y in range(self.patch_dim[1]):
+            for x in range(self.patch_dim[0]):
+                patch_x_bounds = x*self.patch_size[0], (x+1)*self.patch_size[0]
+                patch_y_bounds = y*self.patch_size[1], (y+1)*self.patch_size[1]
 
-        if self.transform:
-            x_reg_image = self.transform(x_reg_image)
-            x_dep_image = self.transform(x_dep_image)
-            y_image = self.transform(y_image)
+                # Get rid of alpha channel and crop to desired patch size
+                x_reg_patch = x_reg_image[patch_y_bounds[0]:patch_y_bounds[1], patch_x_bounds[0]:patch_x_bounds[1], :3]
+                y_patch = y_image[patch_y_bounds[0]:patch_y_bounds[1], patch_x_bounds[0]:patch_x_bounds[1], :3]
 
-        # Get patch index
-        x_patch = patch[3] / (self.patch_dim[0] * self.patch_dim[1])
+                # Get rid of all but one channel (greyscale) and crop to desired patch size
+                x_dep_patch = x_dep_image[patch_y_bounds[0]:patch_y_bounds[1], patch_x_bounds[0]:patch_x_bounds[1], :1]
+
+                if self.transform:
+                    x_reg_patch = self.transform(x_reg_patch)
+                    x_dep_patch = self.transform(x_dep_patch)
+                    y_patch = self.transform(y_patch)
+
+                x_reg_patches[patch_index] = x_reg_patch
+                x_dep_patches[patch_index] = x_dep_patch
+                x_patch_indices[patch_index] = patch_index
+
+                y_patches[patch_index] = y_patch
+
+                patch_index += 1
 
         # Get corresponding pos and light data
-        x_param = torch.Tensor(self.annotations[patch[0]])
+        x_param = torch.Tensor(self.annotations[index])
+        x_param = x_param.expand(self.num_patches, len(x_param))
 
-        return x_reg_image, x_dep_image, x_param, x_patch, y_image
+        return x_reg_patches, x_dep_patches, x_param, x_patch_indices, y_patches
 
     def patch_from_index(self, index):
         patches = self.patch_dim[0] * self.patch_dim[1]
