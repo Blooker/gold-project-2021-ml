@@ -82,14 +82,3 @@ class UnityDataset(Dataset):
 
         return x_reg_patches, x_dep_patches, x_param, x_patch_indices, y_patches
 
-    def patch_from_index(self, index):
-        patches = self.patch_dim[0] * self.patch_dim[1]
-
-        img_index = index // patches
-
-        col_index = index % self.patch_dim[0]
-        row_index = (index - (patches*img_index)) // self.patch_dim[0]
-
-        patch_index = (row_index * self.patch_dim[0]) + col_index
-
-        return img_index, col_index, row_index, patch_index
